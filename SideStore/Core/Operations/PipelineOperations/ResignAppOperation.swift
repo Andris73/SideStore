@@ -140,7 +140,7 @@ final class ResignAppOperation: BasePipelineOperation<InstallAppOperationContext
     /// Rewrites NSExtension.NSExtensionAttributes.WKAppBundleIdentifier in a WatchKit extension's
     /// Info.plist so it references the watch app's final (resigned) bundle identifier.
     private func updateWatchKitAppReference(in watchExtension: ALTApplication, to watchAppBundleId: String) throws {
-        guard var parser = try? InfoPlistParser(plistURL: watchExtension.infoPlistURL) else { return }
+        guard let parser = try? InfoPlistParser(plistURL: watchExtension.infoPlistURL) else { return }
         var infoDictionary = parser.rawDictionary as [String: Any]
         
         guard var extensionInfo = infoDictionary["NSExtension"] as? [String: Any],
