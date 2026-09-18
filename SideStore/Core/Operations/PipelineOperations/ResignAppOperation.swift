@@ -114,7 +114,46 @@ final class ResignAppOperation: BasePipelineOperation<InstallAppOperationContext
             try self.prepare(appExtension, bundleID: updatedAppExBundleId, profiles: profiles, appexBundleIds: appexBundleIds)
         }
         
+        // Watch apps (Watch/*.app) and their nested extensions.
+        // Their CFBundleIdentifiers get the same structural remap as extensions, and additionally:
+        // - the watch app's WKCompanionAppBundleIdentifier must equal the parent's FINAL (resigned) bundle ID,
+        //   otherwise installd rejects the install with InvalidCompanionAppBundleIdentifier (issue #229).
+        // - a WatchKit extension's NSExtensionAttributes.WKAppBundleIdentifier must equal the watch app's final ID.
+        for watchApp in appBundle.watchApps {
+            let updatedWatchAppBundleId = watchApp.bundleIdentifier.replacingOccurrences(of: targetAppBundle.bundleIdentifier, with: bundleIdentifier)
+            let companionValues: [String: Any] = ["WKCompanionAppBundleIdentifier": finalBundleIdentifier]
+            try self.prepare(watchApp, bundleID: updatedWatchAppBundleId, additionalInfoDictionaryValues: companionValues, profiles: profiles, appexBundleIds: appexBundleIds)
+            
+            // The final ID the watch app actually received (its profile's ID, or the remapped ID).
+            let finalWatchAppBundleId = (context.useMainProfile ? profiles.values.first : profiles[updatedWatchAppBundleId])?.bundleIdentifier ?? updatedWatchAppBundleId
+            
+            for watchExtension in watchApp.appExtensions {
+                let updatedWatchExtBundleId = watchExtension.bundleIdentifier.replacingOccurrences(of: targetAppBundle.bundleIdentifier, with: bundleIdentifier)
+                try self.prepare(watchExtension, bundleID: updatedWatchExtBundleId, profiles: profiles, appexBundleIds: appexBundleIds)
+                try self.updateWatchKitAppReference(in: watchExtension, to: finalWatchAppBundleId)
+            }
+        }
+        
         return appBundleURL
+    }
+    
+    /// Rewrites NSExtension.NSExtensionAttributes.WKAppBundleIdentifier in a WatchKit extension's
+    /// Info.plist so it references the watch app's final (resigned) bundle identifier.
+    private func updateWatchKitAppReference(in watchExtension: ALTApplication, to watchAppBundleId: String) throws {
+        guard var parser = try? InfoPlistParser(plistURL: watchExtension.infoPlistURL) else { return }
+        var infoDictionary = parser.rawDictionary as [String: Any]
+        
+        guard var extensionInfo = infoDictionary["NSExtension"] as? [String: Any],
+              var attributes = extensionInfo["NSExtensionAttributes"] as? [String: Any],
+              attributes["WKAppBundleIdentifier"] is String
+        else { return }
+        
+        attributes["WKAppBundleIdentifier"] = watchAppBundleId
+        extensionInfo["NSExtensionAttributes"] = attributes
+        infoDictionary["NSExtension"] = extensionInfo
+        
+        try InfoPlistParser(dictionary: infoDictionary).write(to: watchExtension.infoPlistURL)
+        self.verboseLog("[ResignAppOperation] Updated WKAppBundleIdentifier to \(watchAppBundleId) in \(watchExtension.fileURL.lastPathComponent)")
     }
     
     private func prepare(_ appBundle: ALTApplication, bundleID identifier: String?, additionalInfoDictionaryValues: [String: Any] = [:], profiles: [String: ALTProvisioningProfile], appexBundleIds: [String: String]) throws {
