@@ -32,15 +32,16 @@ class FetchProvisioningProfilesOperation: BasePipelineOperation<InstallAppOperat
 
         let effectiveBundleId = self.context.targetBundleIdentifier
 
-        let appExtensions = targetAppBundle.appExtensions
+        // App extensions, watch apps, and watch-app extensions all need their own App ID + profile.
+        let nestedBundles = targetAppBundle.allNestedBundles
 
         if let overrideProfile = self.context.overrideProvisioningProfile {
             self.debugLog("[FetchProvisioningProfiles] Using override provisioning profile '\(overrideProfile.name)' (\(overrideProfile.uuid)) for \(effectiveBundleId)")
             var profiles = [effectiveBundleId: overrideProfile]
-            if !self.context.useMainProfile, !appExtensions.isEmpty {
-                for appExtension in appExtensions {
-                    let updatedExtensionBundleId = appExtension.bundleIdentifier.replacingOccurrences(of: targetAppBundle.bundleIdentifier, with: effectiveBundleId)
-                    profiles[updatedExtensionBundleId] = overrideProfile
+            if !self.context.useMainProfile, !nestedBundles.isEmpty {
+                for nestedBundle in nestedBundles {
+                    let updatedNestedBundleId = nestedBundle.bundleIdentifier.replacingOccurrences(of: targetAppBundle.bundleIdentifier, with: effectiveBundleId)
+                    profiles[updatedNestedBundleId] = overrideProfile
                 }
             }
             self.setProgress(100)
@@ -59,28 +60,28 @@ class FetchProvisioningProfilesOperation: BasePipelineOperation<InstallAppOperat
         
         var profiles = [effectiveBundleId: profile]
         
-        guard !self.context.useMainProfile, !appExtensions.isEmpty else {
+        guard !self.context.useMainProfile, !nestedBundles.isEmpty else {
             self.setProgress(100)
             self.debugLog("[FetchProvisioningProfiles] Total profiles prepared: \(profiles.count) -> keys: \(Array(profiles.keys))")
             return profiles
         }
         
         self.setProgress(50)
-        self.debugLog("[FetchProvisioningProfiles] Preparing profiles for \(appExtensions.count) app extensions...")
+        self.debugLog("[FetchProvisioningProfiles] Preparing profiles for \(nestedBundles.count) nested bundles (extensions + watch apps)...")
         try await withThrowingTaskGroup(of: (String, ALTProvisioningProfile).self) { group in
-            for appExtension in appExtensions {
+            for nestedBundle in nestedBundles {
                 group.addTask {
-                    self.verboseLog("[FetchProvisioningProfiles] Preparing extension profile for \(appExtension.bundleIdentifier)...")
-                    let extProfile = try await self.provisionAndFetchProfile(for: appExtension, parentAppBundle: targetAppBundle, team: team)
+                    self.verboseLog("[FetchProvisioningProfiles] Preparing nested-bundle profile for \(nestedBundle.bundleIdentifier)...")
+                    let nestedProfile = try await self.provisionAndFetchProfile(for: nestedBundle, parentAppBundle: targetAppBundle, team: team)
                     // Use customized bundle ID if applicable
-                    let updatedExtensionBundleId = appExtension.bundleIdentifier.replacingOccurrences(of: targetAppBundle.bundleIdentifier, with: effectiveBundleId)
-                    self.verboseLog("[FetchProvisioningProfiles] Extension profile prepared for \(updatedExtensionBundleId)")
-                    return (updatedExtensionBundleId, extProfile)
+                    let updatedNestedBundleId = nestedBundle.bundleIdentifier.replacingOccurrences(of: targetAppBundle.bundleIdentifier, with: effectiveBundleId)
+                    self.verboseLog("[FetchProvisioningProfiles] Nested-bundle profile prepared for \(updatedNestedBundleId)")
+                    return (updatedNestedBundleId, nestedProfile)
                 }
             }
             
             var completedCount = 0
-            let totalExtensions = appExtensions.count
+            let totalExtensions = nestedBundles.count
             let startProgress = self.progress.completedUnitCount
             let endProgress: Int64 = 100
             let range = endProgress - startProgress
@@ -214,7 +215,7 @@ private extension FetchProvisioningProfilesOperation{
             self.debugLog("[FetchProvisioningProfiles] Found existing App ID on portal: \(appID.bundleIdentifier)")
             return appID
         } else {
-            let requiredAppIDs = 1 + targetAppBundle.appExtensions.count
+            let requiredAppIDs = 1 + targetAppBundle.allNestedBundles.count
             let availableAppIDs = max(0, Team.maximumFreeAppIDs - appIDs.count)
             self.verboseLog("[FetchProvisioningProfiles] App ID not found on portal for '\(bundleIdentifier)'. Required: \(requiredAppIDs), Available: \(availableAppIDs) (teamType: \(team.type))")
             
