@@ -185,8 +185,11 @@ class FetchProvisioningProfilesOperation: BasePipelineOperation<InstallAppOperat
         let groupAppID = try await self.updateAppGroups(for: updatedAppID, targetAppBundle: targetAppBundle, team: team)
         
         verboseLog(targetAppBundle.dumpMachOInfo())
-        self.debugLog("[FetchProvisioningProfiles] Fetching provisioning profile from Apple for App ID \(groupAppID.bundleIdentifier)...")
-        let profile = try await DeveloperPortalProxy.shared.downloadProvisioningProfile(for: groupAppID, deviceType: DeveloperPortalProxy.currentDeviceType, team: team)
+        // Issue #229: watch bundles need a watchOS-platform profile — request it with the
+        // watch device type so the portal layer sends DTDK_Platform=watchos.
+        let profileDeviceType: ALTDeviceType = targetAppBundle.isWatchApp ? .appleWatch : DeveloperPortalProxy.currentDeviceType
+        self.debugLog("[FetchProvisioningProfiles] Fetching provisioning profile from Apple for App ID \(groupAppID.bundleIdentifier) (deviceType: \(profileDeviceType))...")
+        let profile = try await DeveloperPortalProxy.shared.downloadProvisioningProfile(for: groupAppID, deviceType: profileDeviceType, team: team)
         self.debugLog("[FetchProvisioningProfiles] Provisioning profile fetched for \(groupAppID.bundleIdentifier) (Name: \(profile.name), Expiration: \(String(describing: profile.expirationDate)))")
         return profile
     }
