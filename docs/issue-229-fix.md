@@ -38,6 +38,28 @@ Verified: full app builds; resign of a real Watch-embedded IPA produces exactly 
 remap installd demands; iPhone-side install of a Watch-embedded app now succeeds on device
 (previously hard-failed).
 
+## Device verdict (2026-09-19, iPhone Air iOS 27 + Watch Ultra 3 watchOS 26, free account)
+
+With this branch (structural fix + watchOS-platform profiles via `DTDK_Platform=watchos`):
+
+- iPhone install: ✅ works end to end.
+- Watch profile: fetched with the watch device type, accepted by the portal.
+- Watch-app "Install" (companion transfer / `appconduitd`): ❌ **`MIInstallerErrorDomain
+  Code=111` — "authorized by a free provisioning profile, but apps validated by those are
+  not allowed to be installed from this source."** This is a watchOS **policy gate on the
+  transfer channel**, not a signing defect: the same signed bundle no longer produces
+  `0xe8008015`. Companion transfer appears usable only for paid-team profiles.
+- Conclusion for free accounts: the watch app must be installed over the **developer
+  channel** (companion_proxy / RSD direct install — the path Xcode and
+  [nab138/isideload PR #12](https://github.com/nab138/isideload/pull/12) use). For SideStore
+  that would mean an idevice-gateway install path to the watch rather than handing off to
+  the iOS Watch app.
+
+This PR therefore fixes everything fixable in the resign/provisioning pipeline (and is
+required groundwork for either channel); the final hop for free accounts needs the direct
+install path. Paid-team accounts are expected to work with companion transfer as-is
+(untested here).
+
 ## What is still needed (part 2 — provisioning platform; recipe proven elsewhere)
 
 [nab138/isideload PR #12](https://github.com/nab138/isideload/pull/12) validated free-account
