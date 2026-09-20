@@ -11,7 +11,32 @@ import Minimuxer
 
 struct HealthCheckView: View {
     @StateObject private var viewModel = HealthCheckViewModel()
-    
+    @State private var watchProbeRunning = false
+    @State private var watchProbeLog = ""
+
+    private func runWatchProbe() {
+        watchProbeRunning = true
+        watchProbeLog = "starting…"
+        Task {
+            do {
+                let summary = try await watchCompanionProbe { line in
+                    Task { @MainActor in
+                        watchProbeLog += "\n" + line
+                    }
+                }
+                await MainActor.run {
+                    watchProbeLog = summary
+                    watchProbeRunning = false
+                }
+            } catch {
+                await MainActor.run {
+                    watchProbeLog += "\nFAILED: \(error.localizedDescription)"
+                    watchProbeRunning = false
+                }
+            }
+        }
+    }
+
     var body: some View {
         List {
             // Section 1: Connection Status Header
@@ -159,6 +184,27 @@ struct HealthCheckView: View {
                             InterfaceRow(iface: iface)
                         }
                     }
+                }
+            }
+            // Section 5 (issue #229 spike): watch companion probe
+            Section(header: Text("Apple Watch (experimental)"),
+                    footer: Text("Tests whether the paired Apple Watch's lockdown service is reachable through the companion proxy and completes a pairing handshake. A trust prompt may appear ON THE WATCH — tap Trust there.")) {
+                Button {
+                    runWatchProbe()
+                } label: {
+                    HStack {
+                        Image(systemName: "applewatch.radiowaves.left.and.right")
+                        Text(watchProbeRunning ? "Probing watch…" : "Run Watch Companion Probe")
+                        if watchProbeRunning { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(watchProbeRunning)
+
+                if !watchProbeLog.isEmpty {
+                    Text(watchProbeLog)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .textSelection(.enabled)
                 }
             }
         }

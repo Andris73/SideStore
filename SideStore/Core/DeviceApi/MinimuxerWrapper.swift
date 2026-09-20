@@ -371,6 +371,18 @@ func fetchUDID(forceLive: Bool = false) async throws -> String {
     #endif
 }
 
+/// Issue #229 spike: probe the paired Apple Watch's lockdownd via companion proxy.
+func watchCompanionProbe(progress: (@Sendable (String) -> Void)? = nil) async throws -> String {
+    #if targetEnvironment(simulator)
+    return "watchCompanionProbe is a no-op on simulator"
+    #else
+    debugLog("[SideStore] watchCompanionProbe() invoked")
+    return try await withRemotePairingRetry {
+        try await minimuxer.core.watchCompanionProbe(progress: progress)
+    }
+    #endif
+}
+
 @discardableResult
 func safeFetchUDID(forceLive: Bool = false) async throws -> String {
     try await ensureMinimuxerReady()
