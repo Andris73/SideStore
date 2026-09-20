@@ -37,6 +37,30 @@ struct HealthCheckView: View {
         }
     }
 
+
+    @ViewBuilder
+    private var watchCompanionSection: some View {
+        // Section 5 (issue #229 spike): watch companion probe
+        Section(header: Text("Apple Watch (experimental)"),
+                footer: Text("Tests whether the paired Apple Watch's lockdown service is reachable through the companion proxy and completes a pairing handshake. A trust prompt may appear ON THE WATCH — tap Trust there.")) {
+            SwiftUI.Button(action: runWatchProbe) {
+                HStack {
+                    Image(systemName: "applewatch.radiowaves.left.and.right")
+                    Text(watchProbeRunning ? "Probing watch…" : "Run Watch Companion Probe")
+                    if watchProbeRunning { Spacer(); ProgressView() }
+                }
+            }
+            .disabled(watchProbeRunning)
+
+            if !watchProbeLog.isEmpty {
+                Text(watchProbeLog)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
     var body: some View {
         List {
             // Section 1: Connection Status Header
@@ -186,27 +210,7 @@ struct HealthCheckView: View {
                     }
                 }
             }
-            // Section 5 (issue #229 spike): watch companion probe
-            Section(header: Text("Apple Watch (experimental)"),
-                    footer: Text("Tests whether the paired Apple Watch's lockdown service is reachable through the companion proxy and completes a pairing handshake. A trust prompt may appear ON THE WATCH — tap Trust there.")) {
-                Button {
-                    runWatchProbe()
-                } label: {
-                    HStack {
-                        Image(systemName: "applewatch.radiowaves.left.and.right")
-                        Text(watchProbeRunning ? "Probing watch…" : "Run Watch Companion Probe")
-                        if watchProbeRunning { Spacer(); ProgressView() }
-                    }
-                }
-                .disabled(watchProbeRunning)
-
-                if !watchProbeLog.isEmpty {
-                    Text(watchProbeLog)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .textSelection(.enabled)
-                }
-            }
+            watchCompanionSection
         }
         .navigationTitle("Health Check")
         #if !os(tvOS)
