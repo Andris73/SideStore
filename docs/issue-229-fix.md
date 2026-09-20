@@ -60,6 +60,15 @@ required groundwork for either channel); the final hop for free accounts needs t
 install path. Paid-team accounts are expected to work with companion transfer as-is
 (untested here).
 
+**Update 2026-09-20: end-to-end success confirmed on a free account** using the developer
+channel: the same device pair, signed via the recipe above and installed with
+[nab138/isideload PR #12](https://github.com/nab138/isideload/pull/12)'s watch install path
+(companion_proxy + direct install to the watch), runs on the wrist. Two auth fixes were also
+needed to log in at all (GSA blocks the Xcode client identifier — isideload PR #14 — and
+answers a share of well-formed requests with spurious 429s that must be retried — PR #19).
+This confirms: the blocker for the Watch-app Install button is purely the Code=111 channel
+policy; everything else in this PR's pipeline is correct and sufficient.
+
 ## What is still needed (part 2 — provisioning platform; recipe proven elsewhere)
 
 [nab138/isideload PR #12](https://github.com/nab138/isideload/pull/12) validated free-account
