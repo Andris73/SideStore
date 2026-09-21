@@ -383,6 +383,19 @@ func watchCompanionProbe(progress: (@Sendable (String) -> Void)? = nil) async th
     #endif
 }
 
+/// Issue #229: install signed Watch apps on the paired watch (developer channel).
+func installWatchApps(_ watchAppURLs: [URL], progress: (@Sendable (String) -> Void)? = nil) async throws {
+    defer { debugLog("[SideStore] installWatchApps() completed") }
+    #if targetEnvironment(simulator)
+    debugLog("[SideStore] installWatchApps() is no-op on simulator")
+    #else
+    debugLog("[SideStore] installWatchApps() invoked for \(watchAppURLs.count) bundle(s)")
+    try await withRemotePairingRetry {
+        try await minimuxer.core.installWatchApps(watchAppURLs, progress: progress)
+    }
+    #endif
+}
+
 @discardableResult
 func safeFetchUDID(forceLive: Bool = false) async throws -> String {
     try await ensureMinimuxerReady()

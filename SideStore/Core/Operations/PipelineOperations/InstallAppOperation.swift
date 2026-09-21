@@ -191,6 +191,26 @@ final class InstallAppOperation: BasePipelineOperation<InstallAppOperationContex
             try await installAppBundle(bundleID, appName: resignedAppBundle.fileURL.lastPathComponent)
         }
         
+        self.setProgress(80)
+        
+        // Phase 2b (issue #229): push embedded Watch apps straight to the paired
+        // watch over the developer channel. The iPhone install above only leaves
+        // a placeholder on the watch (companion transfer is policy-blocked for
+        // free provisioning profiles); this is the path Xcode/isideload use.
+        let watchApps = resignedAppBundle.watchApps
+        if !watchApps.isEmpty {
+            let urls = watchApps.map { $0.fileURL }.sorted { $0.path < $1.path }
+            debugLog("[InstallAppOperation] installing \(urls.count) watch app(s) via companion proxy")
+            do {
+                try await installWatchApps(urls) { [weak self] line in
+                    self?.debugLog("[InstallAppOperation][watch] \(line)")
+                }
+            } catch {
+                // Phone install already succeeded; surface but don't fail the operation.
+                debugLog("[InstallAppOperation] watch install FAILED (phone install kept): \(error)")
+            }
+        }
+        
         self.setProgress(90)
         
         // Phase 3: Post-install CoreData write — update refreshedDate
