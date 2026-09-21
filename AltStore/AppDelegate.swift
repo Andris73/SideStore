@@ -76,6 +76,19 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool
     {
+        // issue #229: dump the previous run's watch-install breadcrumb (survives a crash
+        // via fsync) into the console log, so the normal log export contains the last
+        // watch step even when SideStore was killed mid-install. Then clear it.
+        if let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
+            let trace = docs.appendingPathComponent("watch-install-trace.log")
+            if let text = try? String(contentsOf: trace, encoding: .utf8), !text.isEmpty {
+                debugLog("[WatchInstall][prev-run breadcrumb] >>>>>")
+                for line in text.split(separator: "\n") { debugLog("[WatchInstall][prev] \(line)") }
+                debugLog("[WatchInstall][prev-run breadcrumb] <<<<<")
+                try? FileManager.default.removeItem(at: trace)
+            }
+        }
+
         // navigation bar buttons spacing is too much (so hack it to use minimal spacing)
         // this is swift-5 specific behavior and might change
         // https://stackoverflow.com/a/64988363/11971304
